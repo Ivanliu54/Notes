@@ -25,11 +25,13 @@ OK everything is fine
 
 13
 ***
-![example](assets/Review of Deep Learning-04b46d08.png)
-***
+![exdampasdfasdfle](/assets/Review.png)
+
+
 541235
 123412
 3513234
 54123512
 341234
 1234
+2323232
