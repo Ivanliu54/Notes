@@ -65,3 +65,7 @@ Designed to process sequential data
   * Generate captions from images and videos (Xu et al.2015)
 
 #### 3.2.2 Information retrieval
+#### 3.2.3 Natural Language Processing
+#### 3.2.4 Multitask Learning
+When you are optimizing more than one loss function, you are effectively
+doing MTL
