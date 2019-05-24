@@ -212,6 +212,7 @@ exit
 
 ### 4.2.2 操作示例
 
+#### 4.2.2.1 镜像基本操作
 
 在远程image仓库里搜索hello-world 镜像
 ```
@@ -230,4 +231,27 @@ $ docker pull hello-world
 $ docker images
 ```
 ![](https://upload-images.jianshu.io/upload_images/10839544-f563021dea742338.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/554/format/webp)
+
+运行容器：
+
+```
+$ docker run hello-world
+```
+![](https://github.com/Ivanliu54/Notes/blob/master/assets/2019052414.png?raw=true)
+
+
+每次执行docker run，就创建一个Docker容器进程，拥有独立的文件系统、网络和进程树。使用docker ps或者docker container ls可以查询运行的容器。
+那么有人会问，我怎么查询不到呢？ps也查不到相应的进程呢？这是因为容器启动后又退出了。使用docker ps -a或者docker container ls -a查询
+
+当利用 docker run 来启动容器时，Docker在后台运行的标准操作包括：
+1、检查本地是否存在指定的镜像，不存在就从公有仓库下载
+2、利用镜像创建一个容器
+3、分配一个文件系统，并在只读的镜像层外面挂载一层可读写的容器层
+4、从宿主主机配置的网桥接口中桥接一个虚拟接口到容器中去，从地址池配置一个ip地址给容器
+5、启动容器并执行用户指定的应用程序
+6、执行完毕后容器被终止
+
+
+
+#### 4.2.2.2
 
