@@ -14,6 +14,8 @@ RUN git clone https://github.com/facebookresearch/detectron /detectron
 
 cat /etc/resolv.conf       该命令查看容器和宿主机的DNS设置，容器和宿主机的DNS设置应该一致。
 
+如果容器和宿主机中分别执行上述命令，如果其中的nameserver不一样，则修改容器中的nameserver一项保证二者一致。
+
 docker DNS的设置可以通过启动容器时添加参数  --dns  8.8.8.8  来设置（本次有效）
 
 或者通过 /etc/default/docker的DNS参数来进行永久设置，然后重启DOCKER生效，

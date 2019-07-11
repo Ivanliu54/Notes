@@ -27,6 +27,10 @@
                 - [4.4.2.1 指令集：](#4421-指令集)
                 - [4.4.2.2 示例：](#4422-示例)
                 - [4.4.2.3 构建命令](#4423-构建命令)
+    - [5. IDE 连接到容器中](#5-ide-连接到容器中)
+        - [5.1 spyder 开发工具连接到容器内：](#51-spyder-开发工具连接到容器内)
+            - [5.1.1 新建 docker container](#511-新建-docker-container)
+            - [5.1.2.配置 SSH 服务](#512配置-ssh-服务)
 
 <!-- /TOC -->
 ## 1. 容器与虚拟机的区别
@@ -659,5 +663,92 @@ httpd               latest                                    b7cc370ac278      
 ylashin/detectron   latest                                    3f2b6bfd94d7        4 months ago        6.9GB
 caffe2/caffe2       snapshot-py2-cuda9.0-cudnn7-ubuntu16.04   9ae3e8ea7508        16 months ago       3.87GB
 ```
+
 ![](https://docs.docker.com/engine/images/architecture.svg)
 ![](https://upload-images.jianshu.io/upload_images/10839544-5ba9184703c00ef1.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/493/format/webp)
+
+
+## 5. IDE 连接到容器中
+
+### 5.1 spyder 开发工具连接到容器内：
+
+[服务器配置](https://www.leiphone.com/news/201902/fcOmAfgU4CBwvMPM.html)
+
+
+#### 5.1.1 新建 docker container
+
+首先按照如下命令新建一个 docker 容器（关于 docker 的使用这里不废话，建议不熟悉的童鞋先去学一下如何使用 docker，教程很多）：
+```
+sudo nvidia-docker run -it -p [host_port]:[container_port](do not use 8888) --name:[container_name] [image_name] -v [container_path]:[host_path] /bin/bash
+```
+举个栗子：
+```
+sudo nvidia-docker run -p 5592:5592 -p 5593:5593 -p 8022:22 --name="liuzhen_tf" -v ~/workspace/liuzhen/remote_workspace:/workspace/liuzhen/remote_workspace -it tensorflow/tensorflow:latest-gpu /bin/bash
+```
+正确执行完之后，现在我们就处在新建的 docker 容器里了（端口映射，容器名，镜像和路径映射这些换成你自己的就行，但是一定要留一个端口映射到宿主机 22 端口，因为 SFTP 默认使用 22 端口）。
+
+#### 5.1.2.配置 SSH 服务
+
+接着我们在刚刚新建的容器里配置 SSH 服务，首先安装 openssh-server:
+```
+$ apt update
+$ apt install -y openssh-server
+```
+然后建立一个配置文件夹并进行必要的配置：
+```
+$ mkdir /var/run/sshd
+$ echo 'root:passwd' | chpasswd# 这里使用你自己想设置的用户名和密码，但是一定要记住！$ sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+$ sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd
+$ echo "export VISIBLE=now" >> /etc/profile
+```
+重启 SSH 激活配置：
+```
+$ service ssh restart
+```
+在服务器（宿主机）上（不是服务器的 docker 里）测试刚刚新建 docker 容器中哪个端口转发到了服务器的 22 端口：
+```
+$ sudo docker port [your_container_name] 22
+```
+如果前面的配置生效了，你会看到如下输出 
+```
+# 0.0.0.0:8022
+```
+最后测试能否用 SSH 连接到远程 docker：
+```
+$ ssh root@[your_host_ip] -p 8022
+```
+密码是你前面自己设置的
+
+到这里说明服务器的 docker 端已经完成配置。
+
+
+[客户端配置：](https://blog.csdn.net/leonhe27/article/details/85221241)
+
+5.1.3 Spyder配置
+
+服务器端用conda/pip 安装 spyder-kernels
+服务器端用命令 “python -m spyder_kernels.console”开启一个kernel
+![](https://img-blog.csdnimg.cn/20181223112851853)
+
+服务器端用命令 “jupyter --runtime-dir” 找到kernel文件)所在的路径
+
+![](https://img-blog.csdnimg.cn/20181223112851873)
+
+在上述路径中找到kernel文件并将其拷贝到本地端
+在本地端的spyder中，在ipython console右上侧的设置中找到connect to an existing kernel
+
+![](https://img-blog.csdnimg.cn/20181223112851888)
+
+选中刚刚拷贝好的kernel文件，选中this is a remote kernel, 并输入host name与密码。（SSH Keyfile不用管）
+
+![](https://img-blog.csdnimg.cn/20181223112851902)
+
+这样就让spyder连接到服务器了！可以欢快地查看变量了！
+
+![](https://img-blog.csdnimg.cn/20181223112851921)
+
+
+
+最常见的问题就是 docker 容器停了以后里面的 SSH 服务也会相应停止，因此当你发现自己某一天连不上的时候，记得去 docker 里重启一下 ssh 服务：
+
+$ service ssh restart
