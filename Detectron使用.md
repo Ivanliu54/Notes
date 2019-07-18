@@ -213,7 +213,7 @@ import路径不对,covert_pkl_to_pb的第44行：改成：
 
 from caffe2.**python**.predictor import predictor_exporter, predictor_py_utils
 
-**B. model = u, 模型导入为空：**
+**C. model = u, 模型导入为空：**
 
 covert_pkl_to_pb的第451行：改成： model = test_engine.initialize_model_from_cfg(cfg.**TRAIN**.WEIGHTS)
 
@@ -223,13 +223,195 @@ covert_pkl_to_pb的第451行：改成： model = test_engine.initialize_model_fr
 sudo apt-get install graphviz
 
 
-## 3.2 pb模型python 调用
+## 3.2 模型调用
+
+### 3.2.1 pkl模型python调用
+
+#### 3.2.1.1 模型调用逻辑 
+
+#### 3.2.1.2 数据处理逻辑
+
+OPEN CV读取图片
+```
+infer_simple.py 第176行 im=cv2.imread(im_name)
+                第184行 cls_boxes, cls_segms, cls_keyps = infer_engine.im_detect_all(model, im, None, timers=timers)
+```
+把图片转成blobs
+```
+test.py 第52行  def im_detect_all(model, im, box_proposals, timers=None):
+        第66行  scores, boxes, im_scale = im_detect_bbox(model, im， cfg.TEST.SCALE, cfg.TEST.MAX_SIZE, boxes=box_proposals)
+        第943行 def _get_blobs(im, rois, target_scale, target_max_size):
+                blobs['data'], im_scale, blobs['im_info'] = blob_utils.get_image_blob(im, target_scale, target_max_size)
+```
+图片预处理
+```
+blob.py 第51行  processed_im, im_scale = prep_im_for_blob(im, cfg.PIXEL_MEANS, target_scale, target_max_size    )
+                    return blob, im_scale, im_info.astype(np.float32)
+```
+缩放到指定尺寸
+```
+        第100行 def prep_im_for_blob(im, pixel_means, target_size, max_size):
+                im = im.astype(np.float32, copy=False)
+                im -= pixel_means
+                im_shape = im.shape
+                im_size_min = np.min(im_shape[0:2])
+                im_size_max = np.max(im_shape[0:2])
+                im_scale = float(target_size) / float(im_size_min)
+                # Prevent the biggest axis from being more than max_size
+                if np.round(im_scale * im_size_max) > max_size:
+                    im_scale = float(max_size) / float(im_size_max)
+                im = cv2.resize(
+                im,
+                None,
+                None,
+                fx=im_scale,
+                fy=im_scale,
+                interpolation=cv2.INTER_LINEAR
+                return im, im_scale
+```
+图片数据转成数组
+```
+        第54行 blob = im_list_to_blob(processed_im)
+        第67行 def im_list_to_blob(ims):
+                    """Convert a list of images into a network input. Assumes images were
+                    prepared using prep_im_for_blob or equivalent: i.e.
+                    - BGR channel order
+                    - pixel means subtracted
+                    - resized to the desired input size
+                    - float32 numpy ndarray format
+                    Output is a 4D HCHW tensor of the images concatenated along axis 0 with
+                    shape.
+                    """
+                    if not isinstance(ims, list):
+                        ims = [ims]
+                    max_shape = np.array([im.shape for im in ims]).max(axis=0)
+                    # Pad the image so they can be divisible by a stride
+                    if cfg.FPN.FPN_ON:
+                        stride = float(cfg.FPN.COARSEST_STRIDE)
+                        max_shape[0] = int(np.ceil(max_shape[0] / stride) * stride)
+                        max_shape[1] = int(np.ceil(max_shape[1] / stride) * stride)
+
+                    num_images = len(ims)
+                    blob = np.zeros(
+                        (num_images, max_shape[0], max_shape[1], 3), dtype=np.float32
+                    )
+                    for i in range(num_images):
+                        im = ims[i]
+                        blob[i, 0:im.shape[0], 0:im.shape[1], :] = im
+                    # Move channels (axis 3) to axis 1
+                    # Axis order will become: (batch elem, channel, height, width)
+                    channel_swap = (0, 3, 1, 2)
+                    blob = blob.transpose(channel_swap)
+                    return blob
+```
+
+FeedBlob
+```
+test 第155行 for k, v in inputs.items():
+             workspace.FeedBlob(core.ScopedName(k), v)
+```
+### 3.2.2 pb模型python 调用
 
 https://www.wandouip.com/t5i70287/
 
 
+#### 3.2.2.1 模型调用逻辑 
+```
+use_pb_model_with_python.py   161行  workspace.RunNet()
+
+workspace.py 第251行 return  CallWithExceptionIntercept(
+                                C.run_net,
+                                C.Workspace.current._last_failed_op_net_position,
+                                GetNetName(name),
+                                StringifyNetName(name), num_iter, allow_fail,
+                                )
+
+workspace.py 第214行 def CallWithExceptionIntercept(C.run_net,.....）
+                         return  C.run_net （）
 
 
-## 3.3 pb模型C++调用
+workspace.py 第23行  import caffe2.python._import_c_extension as C
+
+_import_c_extension.py 第27行 from caffe2.python.caffe2_pybind11_state_gpu import *  
+
+```
+#### 3.2.2.2 数据处理逻辑
+```
+use_pb_model_with_python.py 第179行 test_img = cv2.imread(test_img_file)
+                            第191行  boxes, classids = run_model_pb(predict_net, init_net, test_img)
+                            第118行 def run_model_pb(net, init_net, im):
+                            第126行    input_blobs = _prepare_blobs(
+                                                    im,
+                                                    PIXEL_MEANS,
+                                                    TEST_SCALE, TEST_MAX_SIZE
+                                                      )
+                            第78行 def _prepare_blobs(
+                                                        im,
+                                                        pixel_means,
+                                                        target_size,
+                                                        max_size,
+                                                    ):
+                                                    im = im.astype(np.float32, copy=False)
+                                                    im -= pixel_means
+                                                    im_shape = im.shape
+
+                                                    im_size_min = np.min(im_shape[0:2])
+                                                    im_size_max = np.max(im_shape[0:2])
+                                                    im_scale = float(target_size) / float(im_size_min)
+                                                    if np.round(im_scale * im_size_max) > max_size:
+                                                        im_scale = float(max_size) / float(im_size_max)
+                                                    im = cv2.resize(im, None, None, fx=im_scale, fy=im_scale,
+                                                                    interpolation=cv2.INTER_LINEAR)
+
+                                                    # Reuse code in blob_utils and fit FPN
+                                                    blob = im_list_to_blob([im])
+
+                                                    blobs = {}
+                                                    blobs['data'] = blob
+                                                    blobs['im_info'] = np.array(
+                                                        [[blob.shape[2], blob.shape[3], im_scale]],
+                                                        dtype=np.float32
+                                                    )
+                                                     return blobs
+                            第133行     for k, v in input_blobs.items():
+                                                    workspace.FeedBlob(
+                                                        core.ScopedName(k),
+                                                        v,
+                                                        get_device_option_cuda() if k in gpu_blobs else
+                                                        get_device_option_cpu()
+                                                    )
+
+
+```
+#### 3.2.2.3 碰到的问题
+
+1. Class类别无法显示：
+
+vis.py文件中vis_one_image的输入数据类型不对应，原来pkl的模型输入的是cls_boxes包含了boxes和classes。现在把boxes和classes单独输入
+
+2. GPU无法运行，也不报错：
+
+pkl导出pb模型的时候类型选择需要选成gpu。
+
+
+#### 3.2.2.4 python工程打包
+
+安裝pyinstaller
+
+pip install pyinstaller
+
+复制 pycocotools：
+cp -r /root/detectron/tools/build/use_pb_model_with_python/pycocotools-2.0-py2.7-linux-x86_64.egg/pycocotools /root/detectron/tools/dist/use_pb_model_with_python
+
+matplot 必须是2.0.2以下：
+
+pip uninstall matplotlib
+pip install matplotlib==2.0.2
+
+打包:
+pyinstaller ***.py
+
+
+## 3.2.3 pb模型C++调用
 
 
